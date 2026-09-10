@@ -42,7 +42,7 @@ export default function Dashboard() {
     ]
   })
 
-  // Initialisation des trades depuis le localStorage ou avec des données par défaut
+  // Initialisation des trades et sessions de replay
   const [trades, setTrades] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('ruledesk_trades')
@@ -89,10 +89,12 @@ export default function Dashboard() {
     localStorage.setItem('ruledesk_trades', JSON.stringify(trades))
   }, [trades])
 
+  // États pour les modales
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isTradeModalOpen, setIsTradeModalOpen] = useState(false)
   const [isReportModalOpen, setIsReportModalOpen] = useState(false)
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false)
+  const [isReplayModalOpen, setIsReplayModalOpen] = useState(false)
 
   const [newFirm, setNewFirm] = useState('')
   const [newAccountType, setNewAccountType] = useState('Prop Firm')
@@ -108,6 +110,17 @@ export default function Dashboard() {
 
   const [aiReport, setAiReport] = useState<string | null>(null)
   const [csvContent, setCsvContent] = useState('')
+
+  // États du module de Replay en temps réel
+  const [replayPair, setReplayPair] = useState('EURUSD')
+  const [replayStep, setReplayStep] = useState(1)
+  const [replayPrice, setReplayPrice] = useState(1.0850)
+  const [replayLog, setReplayLog] = useState<string[]>([
+    'Initialisation de la session de replay 4H...',
+    'Chargement de la structure de prix et des zones d’intérêt (AOI)...'
+  ])
+  const [replayPosition, setReplayPosition] = useState<'Aucune' | 'Achat' | 'Vente'>('Aucune')
+  const [replayEntryPrice, setReplayEntryPrice] = useState<number | null>(null)
 
   // Calcul du score de discipline
   const calculateDisciplineScore = () => {
@@ -150,7 +163,7 @@ export default function Dashboard() {
     }
   }
 
-  // Gestion de l'upload d'image (conversion en Base64 pour persistance localStorage)
+  // Gestion de l'upload d'image
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -162,7 +175,58 @@ export default function Dashboard() {
     }
   }
 
-  // Importation basique CSV
+  // Fonctions de Replay en temps réel
+  const handleNextCandle = () => {
+    const randomVariation = (Math.random() - 0.48) * 0.0020
+    const newP = Number((replayPrice + randomVariation).toFixed(4))
+    setReplayPrice(newP)
+    setReplayStep(prev => prev + 1)
+    setReplayLog(prev => [
+      `[Bougie 4H #${replayStep + 1}] Prix actuel : ${newP} — Test de la zone d'intérêt en cours.`,
+      ...prev.slice(0, 5)
+    ])
+  }
+
+  const handleOpenReplayTrade = (type: 'Achat' | 'Vente') => {
+    setReplayPosition(type)
+    setReplayEntryPrice(replayPrice)
+    setReplayLog(prev => [
+      `🚀 [REPLAY] Ordre ${type} exécuté au prix de ${replayPrice}`,
+      ...prev.slice(0, 5)
+    ])
+  }
+
+  const handleCloseReplayTrade = () => {
+    if (replayPosition === 'Aucune' || replayEntryPrice === null) return
+    const diff = replayPrice - replayEntryPrice
+    const pnl = replayPosition === 'Achat' ? Math.round(diff * 10000) : Math.round(-diff * 10000)
+    
+    // Ajout automatique au journal des trades
+    const simulatedTrade = {
+      id: `replay-${Date.now()}`,
+      pair: replayPair,
+      type: replayPosition,
+      strategy: 'Replay Test 4H',
+      session: 'Session Replay',
+      resultUSD: pnl,
+      status: pnl >= 0 ? 'Gain' : 'Perte',
+      errorAnalyzed: `Backtest Replay en temps réel sur ${replayPair}. Entrée: ${replayEntryPrice} -> Sortie: ${replayPrice}`,
+      detectedPattern: pnl >= 0 ? '🎯 Pattern Gagnant : Replay validé' : '⚠️ Pattern Piège : Replay en perte',
+      score: pnl >= 0 ? 8 : 4,
+      imageUrl: null
+    }
+
+    setTrades([simulatedTrade, ...trades])
+    setReplayLog(prev => [
+      `🏁 [REPLAY] Position fermée. Résultat PnL : ${pnl}$`,
+      ...prev.slice(0, 5)
+    ])
+    setReplayPosition('Aucune')
+    setReplayEntryPrice(null)
+    alert(`Position fermée avec succès ! Résultat : ${pnl}$ enregistré dans ton journal.`)
+  }
+
+  // Importation CSV
   const handleCsvImport = (e: React.FormEvent) => {
     e.preventDefault()
     if (!csvContent) return
@@ -200,7 +264,7 @@ export default function Dashboard() {
       setIsCsvModalOpen(false)
       alert(`${importedTrades.length} trade(s) importé(s) avec succès !`)
     } else {
-      alert('Format CSV invalide. Assurez-vous d’utiliser le format : Paire, PnL, Commentaire')
+      alert('Format CSV invalide. Utilisez : Paire, PnL, Commentaire')
     }
   }
 
@@ -316,6 +380,12 @@ export default function Dashboard() {
             <p className="text-xs text-slate-400 mt-0.5">Trader : <span className="text-white font-medium">{userProfile.name}</span> ({userProfile.email})</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button 
+              onClick={() => setIsReplayModalOpen(true)}
+              className="bg-emerald-950 hover:bg-emerald-900 text-emerald-400 border border-emerald-500/40 px-3 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center space-x-1"
+            >
+              <span>⚡ Replay Backtest</span>
+            </button>
             <button 
               onClick={() => setIsCsvModalOpen(true)}
               className="bg-slate-800 hover:bg-slate-700 text-sky-400 border border-sky-500/30 px-3 py-2 rounded-lg text-xs font-medium transition-colors"
@@ -510,7 +580,106 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Modales */}
+      {/* Modale Replay Backtest en temps réel */}
+      {isReplayModalOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-emerald-500/30 p-6 rounded-2xl w-full max-w-2xl shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-white flex items-center space-x-2">
+                <span>⚡ Replay Backtest en Temps Réel</span>
+              </h2>
+              <span className="text-xs bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                Mode Swing 4H / AOI
+              </span>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3 bg-slate-950 p-4 rounded-xl border border-slate-800">
+                <div>
+                  <label className="block text-[10px] text-slate-400 uppercase font-semibold mb-1">Paire de la Watchlist</label>
+                  <select 
+                    value={replayPair} 
+                    onChange={(e) => setReplayPair(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-white text-xs"
+                  >
+                    <option>EURUSD</option>
+                    <option>GBPUSD</option>
+                    <option>USDJPY</option>
+                    <option>XAUUSD</option>
+                    <option>AUDUSD</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] text-slate-400 uppercase font-semibold mb-1">Étape / Bougie 4H</label>
+                  <div className="text-emerald-400 font-bold text-sm pt-1">#{replayStep}</div>
+                </div>
+                <div>
+                  <label className="block text-[10px] text-slate-400 uppercase font-semibold mb-1">Prix Actuel Simulée</label>
+                  <div className="text-white font-mono font-bold text-sm pt-1">{replayPrice}</div>
+                </div>
+              </div>
+
+              {/* Contrôles du Replay */}
+              <div className="flex flex-wrap gap-2 justify-between items-center bg-slate-950 p-4 rounded-xl border border-slate-800">
+                <div className="flex space-x-2">
+                  <button 
+                    onClick={handleNextCandle}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg text-xs font-semibold transition-colors shadow-lg"
+                  >
+                    ▶ Avancer Bougie 4H (+1)
+                  </button>
+                </div>
+                <div className="flex space-x-2">
+                  {replayPosition === 'Aucune' ? (
+                    <>
+                      <button 
+                        onClick={() => handleOpenReplayTrade('Achat')}
+                        className="bg-sky-600/20 text-sky-400 border border-sky-500/30 hover:bg-sky-600/30 px-3 py-1.5 rounded-lg text-xs font-medium"
+                      >
+                        📈 Entrer Achat (Buy)
+                      </button>
+                      <button 
+                        onClick={() => handleOpenReplayTrade('Vente')}
+                        className="bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-600/30 px-3 py-1.5 rounded-lg text-xs font-medium"
+                      >
+                        📉 Entrer Vente (Sell)
+                      </button>
+                    </>
+                  ) : (
+                    <button 
+                      onClick={handleCloseReplayTrade}
+                      className="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold animate-pulse"
+                    >
+                      🛑 Clôturer la Position ({replayPosition} @ {replayEntryPrice})
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Console des Logs en direct */}
+              <div>
+                <label className="block text-xs text-slate-400 mb-1 font-medium">Journal d'exécution du Replay :</label>
+                <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 h-28 overflow-y-auto font-mono text-[11px] text-slate-300 space-y-1">
+                  {replayLog.map((log, idx) => (
+                    <div key={idx} className="border-b border-slate-900/50 pb-0.5">{log}</div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4 mt-2 border-t border-slate-800">
+              <button 
+                onClick={() => setIsReplayModalOpen(false)}
+                className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-xs font-medium transition-colors"
+              >
+                Fermer le Replay
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modales classiques */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl">
@@ -598,6 +767,7 @@ export default function Dashboard() {
                     <option>Swing 4H (20 EMA)</option>
                     <option>Hybrid Swing AOI</option>
                     <option>Breakout / Rejection</option>
+                    <option>Replay Test 4H</option>
                   </select>
                 </div>
                 <div>
