@@ -123,18 +123,16 @@ export default function Dashboard() {
   const [replayEntryPrice, setReplayEntryPrice] = useState<number | null>(null)
 
   // Calcul du score de discipline
-  const calculatedDisciplinesScore = () => {
-    let score = 100;
-    accounts.forEach((acc: { account_type?: string; total_loss?: number; account_size?: number; current_balance?: number }) => {
+  const calculateDisciplineScore = () => {
+    let score = 100
+    accounts.forEach(acc => {
       if (acc.account_type === 'Prop Firm') {
-        const totalloss = (acc.account_size || 0) - (acc.current_balance || 0);
-        if (totalloss > 0) {
-          score -= 10;
-        }
-      }
-    });
-    return Math.max(0, score);
-  };
+        const totalLoss = acc.account_size - acc.current_balance
+        const totalLossPercent = (totalLoss / acc.account_size) * 100
+        if (totalLossPercent > 2) score -= 20
+        if (totalLossPercent > 5) score -= 30
+        if (acc.daily_drawdown_limit > 0 && acc.daily_drawdown_current >= acc.daily_drawdown_limit * 0.8) {
+          score -= 25
         }
       }
     })
