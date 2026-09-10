@@ -1,6 +1,6 @@
 // @ts-nocheck
 'use client';
-
+import "./globals.css";
 import { useState, useEffect } from 'react'
 
 export default function Dashboard() {
