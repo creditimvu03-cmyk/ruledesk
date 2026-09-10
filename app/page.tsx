@@ -125,7 +125,7 @@ export default function Dashboard() {
   // Calcul du score de discipline
   const calculateDisciplineScore = () => {
     let score = 100
-    accounts.forEach(acc => {
+    accounts.forEach((acc: any) => {
       if (acc.account_type === 'Prop Firm') {
         const totalLoss = acc.account_size - acc.current_balance
         const totalLossPercent = (totalLoss / acc.account_size) * 100
