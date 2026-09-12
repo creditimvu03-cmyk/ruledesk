@@ -1,0 +1,12 @@
+{
+    "crons": [
+      {
+        "path": "/api/reports/generate?type=WEEKLY",
+        "schedule": "0 23 * * 0"
+      },
+      {
+        "path": "/api/reports/generate?type=MONTHLY",
+        "schedule": "0 0 1 * *"
+      }
+    ]
+  }
